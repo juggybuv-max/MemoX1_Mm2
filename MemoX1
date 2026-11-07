@@ -1,5 +1,3 @@
-no obfuscation hehe to prove this not stealer and you can use these scripts for your own!
-
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
 local window = Rayfield:CreateWindow({
@@ -22,9 +20,6 @@ local camera = Workspace.CurrentCamera
 local character = player.Character or player.CharacterAdded:Wait()
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- MM2 Round Data Module
-local CRC = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("CurrentRoundClient")
-
 local visitedPositions = {}
 local isActive = false
 local flySpeed = 15
@@ -37,6 +32,8 @@ local espInnocents = false
 local espSheriff = false
 local espMurderer = false
 local espGun = false
+local roles
+local Murder, Sheriff, Hero
 
 -- Aimlock Variables
 local aimlockActive = false
@@ -95,20 +92,6 @@ local function getPlayerList()
     return names
 end
 
--- Helper: Find Murderer Character via CRC Module
-local function getMurdererCharacter()
-	local pData = CRC.PlayerData
-	if pData then
-		for name, d in pairs(pData) do
-			if d.Role == "Murderer" then
-				local p = Players:FindFirstChild(name)
-				if p and p.Character then return p.Character end
-			end
-		end
-	end
-	return nil
-end
-
 -- Helper: Find Dropped Gun Instance (GunDrop in Workspace)
 local function getDroppedGun()
     local directGun = Workspace:FindFirstChild("GunDrop")
@@ -158,16 +141,21 @@ task.spawn(function()
     end
 end)
 
--- Bullet TP Target Retrieval via CRC Data
+-- Bullet TP Target Retrieval via Remote Data
 local function getMurder()
-    local pData = CRC.PlayerData
-    if pData then
-        for name, d in pairs(pData) do
-            if d.Role == "Murderer" then
-                local murd = Players:FindFirstChild(name)
-                if murd and murd.Character and murd.Character:FindFirstChild("HumanoidRootPart") then
-                    return murd.Character.HumanoidRootPart
-                end
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local extras = remotes and remotes:FindFirstChild("Extras")
+    local remote = extras and extras:FindFirstChild("GetPlayerData")
+    if not remote then return nil end
+
+    local data = remote:InvokeServer()
+    if not data or type(data) ~= "table" then return nil end
+
+    for i, plr in pairs(data) do
+        if plr.Role == "Murderer" then
+            local murd = Players:FindFirstChild(i)
+            if murd and murd.Character and murd.Character:FindFirstChild("HumanoidRootPart") then
+                return murd.Character.HumanoidRootPart
             end
         end
     end
@@ -336,6 +324,23 @@ aimBtn.MouseButton1Click:Connect(function()
         end
     end
 end)
+
+-- Helper for aimlock target lookup
+function getMurdererCharacter()
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local extras = remotes and remotes:FindFirstChild("Extras")
+    local remote = extras and extras:FindFirstChild("GetPlayerData")
+    if not remote then return nil end
+    local data = remote:InvokeServer()
+    if not data or type(data) ~= "table" then return nil end
+    for i, plr in pairs(data) do
+        if plr.Role == "Murderer" then
+            local murd = Players:FindFirstChild(i)
+            if murd and murd.Character then return murd.Character end
+        end
+    end
+    return nil
+end
 
 -- ──────────────────────────────────────────────
 -- MINI UI 2: BULLET TP BUTTON
@@ -685,7 +690,7 @@ FarmTab:CreateButton({
 })
 
 -- ──────────────────────────────────────────────
--- TAB 3: ESP (CRC MODULE POWERED)
+-- TAB 3: ESP (WORKING ROLE MODULE + GUN ESP)
 -- ──────────────────────────────────────────────
 local EspTab = window:CreateTab({ name = "ESP", icon = 10723415903 })
 
@@ -699,7 +704,7 @@ espLeft:CreateButton({
     callback = function()
         window:Notify({
             title = "ESP Colors",
-            content = "🟢 = Innocent | 🔴 = Murderer | 🔵 = Sheriff | 🟣 = Dropped Gun | 🟡 = Owner of script"
+            content = "🟢 = Innocent | 🔴 = Murderer | 🔵 = Sheriff | 🟡 = Hero | 🟣 = Dropped Gun (GunDrop)"
         })
     end,
 })
@@ -712,7 +717,7 @@ espLeft:CreateToggle({
 })
 
 espLeft:CreateToggle({
-    name = "🔵 ESP Sheriff",
+    name = "🔵 ESP Sheriff / Hero",
     callback = function(value)
         espSheriff = value
     end,
@@ -735,57 +740,88 @@ espRight:CreateToggle({
     end,
 })
 
--- Fast CRC Module ESP Engine
-local function updatePlayerESP()
-    local pData = CRC.PlayerData or {}
-    
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player then
-            local char = p.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                local hl = char:FindFirstChild("MM2_ESP_Highlight")
-                local color = nil
-                local show = false
-
-                if p.Name == "gofisin7" then
-                    color = Color3.fromRGB(255, 255, 0)
-                    show = true
-                else
-                    local data = pData[p.Name]
-                    local role = data and data.Role
-
-                    if role == "Murderer" and espMurderer then
-                        color = Color3.fromRGB(255, 50, 50)
-                        show = true
-                    elseif role == "Sheriff" and espSheriff then
-                        color = Color3.fromRGB(50, 150, 255)
-                        show = true
-                    elseif role == "Innocent" and espInnocents then
-                        color = Color3.fromRGB(0, 255, 0)
-                        show = true
-                    end
-                end
-
-                if show and color then
-                    if not hl then
-                        hl = Instance.new("Highlight")
-                        hl.Name = "MM2_ESP_Highlight"
-                        hl.Parent = char
-                    end
-                    hl.Enabled = true
-                    hl.FillColor = color
-                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                else
-                    if hl then hl:Destroy() end
-                end
-            end
-        end
-    end
+-- Helper functions for working role-based ESP
+local function CreateHighlight()
+	for _, v in pairs(Players:GetChildren()) do
+		if v ~= player and v.Character and not v.Character:FindFirstChild("MM2_Role_Highlight") then
+			local h = Instance.new("Highlight")
+			h.Name = "MM2_Role_Highlight"
+			h.Parent = v.Character           
+		end
+	end
 end
 
--- RenderStepped ESP Loop (Player Roles & GunDrop ESP)
+local function IsAlive(Player)
+	if not roles then return false end
+	for i, v in pairs(roles) do
+		if Player.Name == i then
+			if not v.Killed and not v.Dead then
+				return true
+			else
+				return false
+			end
+		end
+	end
+	return false
+end
+
+local function UpdateHighlights()
+	if not roles then return end
+	for _, v in pairs(Players:GetChildren()) do
+		if v ~= player and v.Character then
+			local hl = v.Character:FindFirstChild("MM2_Role_Highlight")
+			if hl then
+				local show = false
+				local color = Color3.fromRGB(0, 225, 0)
+
+				if v.Name == Sheriff and IsAlive(v) and espSheriff then
+					color = Color3.fromRGB(50, 150, 255)
+					show = true
+				elseif v.Name == Murder and IsAlive(v) and espMurderer then
+					color = Color3.fromRGB(255, 50, 50)
+					show = true
+				elseif v.Name == Hero and IsAlive(v) and not IsAlive(Players:FindFirstChild(Sheriff or "")) and espSheriff then
+					color = Color3.fromRGB(255, 250, 0)
+					show = true
+				elseif espInnocents and IsAlive(v) then
+					color = Color3.fromRGB(0, 225, 0)
+					show = true
+				end
+
+				if show then
+					hl.Enabled = true
+					hl.FillColor = color
+					hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+				else
+					hl.Enabled = false
+				end
+			end
+		end
+	end
+end
+
+-- RenderStepped ESP Loop (Roles + Workspace.GunDrop)
 RunService.RenderStepped:Connect(function()
-    updatePlayerESP()
+    -- Fetch roles from GetPlayerData remote
+    local success, res = pcall(function()
+        return ReplicatedStorage:FindFirstChild("GetPlayerData", true):InvokeServer()
+    end)
+    
+    if success and res then
+        roles = res
+        Murder, Sheriff, Hero = nil, nil, nil
+        for i, v in pairs(roles) do
+            if v.Role == "Murderer" then
+                Murder = i
+            elseif v.Role == 'Sheriff' then
+                Sheriff = i
+            elseif v.Role == 'Hero' then
+                Hero = i
+            end
+        end
+        CreateHighlight()
+        UpdateHighlights()
+    end
 
     -- Workspace.GunDrop ESP (Purple 🟣 + "GUN" Tag)
     local droppedGun = getDroppedGun()
@@ -830,6 +866,3 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
-
--- CRC Event Listener for Instant Updates
-CRC.PlayerDataChanged.Event:Connect(updatePlayerESP)
