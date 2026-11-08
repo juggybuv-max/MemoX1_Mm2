@@ -1,8 +1,8 @@
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
 local window = Rayfield:CreateWindow({
-    name = "🎃 MM2 Halloween Hub",
-    subtitle = "Rayfield Gen2",
+    name = "MemoX1",
+    subtitle = "https://discord.gg/s4XSjjyE4",
     sidebarLayout = true,
 })
 
