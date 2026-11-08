@@ -995,18 +995,6 @@ end)
 -- ──────────────────────────────────────────────
 local PlayerTab = window:CreateTab({ name = "Player", icon = 10723424174 })
 
-PlayerTab:CreateToggle({
-    name = "👻 Show Invisibility Button",
-    callback = function(value)
-        invisGui.Enabled = value
-        if value then
-            window:Notify({ title = "Invisibility UI", content = "Invisibility Button Spawned!" })
-        else
-            window:Notify({ title = "Invisibility UI", content = "Invisibility Button Hidden!" })
-        end
-    end,
-})
-
 PlayerTab:CreateButton({
     name = "🎭 FE Animation Changer",
     callback = function()
@@ -1020,15 +1008,3 @@ PlayerTab:CreateButton({
         end
     end,
 })
-
--- Clean up invisible chairs on respawn
-player.CharacterAdded:Connect(function(character)
-    playerState.isInvisible = false
-    invisBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-    invisBtn.Text = "👻 Invisibility\nButton"
-    
-    local invisChair = workspace:FindFirstChild("invischair")
-    if invisChair then
-        invisChair:Destroy()
-    end
-end)
