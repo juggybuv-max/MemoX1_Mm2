@@ -1,8 +1,8 @@
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
 local window = Rayfield:CreateWindow({
-    name = "MemoX1",
-    subtitle = "By Gofisin7",
+    name = "🎃 MM2 Halloween Hub",
+    subtitle = "Rayfield Gen2",
     sidebarLayout = true,
 })
 
@@ -32,7 +32,7 @@ local espInnocents = false
 local espSheriff = false
 local espMurderer = false
 local espGun = false
-local roles
+local roles = {}
 local Murder, Sheriff, Hero
 
 -- Aimlock Variables
@@ -148,8 +148,10 @@ local function getMurder()
     local remote = extras and extras:FindFirstChild("GetPlayerData")
     if not remote then return nil end
 
-    local data = remote:InvokeServer()
-    if not data or type(data) ~= "table" then return nil end
+    local success, data = pcall(function()
+        return remote:InvokeServer()
+    end)
+    if not success or not data or type(data) ~= "table" then return nil end
 
     for i, plr in pairs(data) do
         if plr.Role == "Murderer" then
@@ -331,8 +333,8 @@ function getMurdererCharacter()
     local extras = remotes and remotes:FindFirstChild("Extras")
     local remote = extras and extras:FindFirstChild("GetPlayerData")
     if not remote then return nil end
-    local data = remote:InvokeServer()
-    if not data or type(data) ~= "table" then return nil end
+    local success, data = pcall(function() return remote:InvokeServer() end)
+    if not success or not data or type(data) ~= "table" then return nil end
     for i, plr in pairs(data) do
         if plr.Role == "Murderer" then
             local murd = Players:FindFirstChild(i)
@@ -690,7 +692,7 @@ FarmTab:CreateButton({
 })
 
 -- ──────────────────────────────────────────────
--- TAB 3: ESP (WORKING ROLE MODULE + GUN ESP)
+-- TAB 3: ESP (STICKY ROLE MODULE + GUN ESP)
 -- ──────────────────────────────────────────────
 local EspTab = window:CreateTab({ name = "ESP", icon = 10723415903 })
 
@@ -740,13 +742,16 @@ espRight:CreateToggle({
     end,
 })
 
--- Helper functions for working role-based ESP
+-- Sticky Helper functions for role-based ESP
 local function CreateHighlight()
 	for _, v in pairs(Players:GetChildren()) do
-		if v ~= player and v.Character and not v.Character:FindFirstChild("MM2_Role_Highlight") then
-			local h = Instance.new("Highlight")
-			h.Name = "MM2_Role_Highlight"
-			h.Parent = v.Character           
+		if v ~= player and v.Character then
+			local hl = v.Character:FindFirstChild("MM2_Role_Highlight")
+			if not hl then
+				hl = Instance.new("Highlight")
+				hl.Name = "MM2_Role_Highlight"
+				hl.Parent = v.Character           
+			end
 		end
 	end
 end
@@ -766,7 +771,6 @@ local function IsAlive(Player)
 end
 
 local function UpdateHighlights()
-	if not roles then return end
 	for _, v in pairs(Players:GetChildren()) do
 		if v ~= player and v.Character then
 			local hl = v.Character:FindFirstChild("MM2_Role_Highlight")
@@ -774,18 +778,20 @@ local function UpdateHighlights()
 				local show = false
 				local color = Color3.fromRGB(0, 225, 0)
 
-				if v.Name == Sheriff and IsAlive(v) and espSheriff then
-					color = Color3.fromRGB(50, 150, 255)
-					show = true
-				elseif v.Name == Murder and IsAlive(v) and espMurderer then
-					color = Color3.fromRGB(255, 50, 50)
-					show = true
-				elseif v.Name == Hero and IsAlive(v) and not IsAlive(Players:FindFirstChild(Sheriff or "")) and espSheriff then
-					color = Color3.fromRGB(255, 250, 0)
-					show = true
-				elseif espInnocents and IsAlive(v) then
-					color = Color3.fromRGB(0, 225, 0)
-					show = true
+				if roles and roles[v.Name] then
+					if v.Name == Sheriff and IsAlive(v) and espSheriff then
+						color = Color3.fromRGB(50, 150, 255)
+						show = true
+					elseif v.Name == Murder and IsAlive(v) and espMurderer then
+						color = Color3.fromRGB(255, 50, 50)
+						show = true
+					elseif v.Name == Hero and IsAlive(v) and not IsAlive(Players:FindFirstChild(Sheriff or "")) and espSheriff then
+						color = Color3.fromRGB(255, 250, 0)
+						show = true
+					elseif espInnocents and IsAlive(v) then
+						color = Color3.fromRGB(0, 225, 0)
+						show = true
+					end
 				end
 
 				if show then
@@ -800,14 +806,17 @@ local function UpdateHighlights()
 	end
 end
 
--- RenderStepped ESP Loop (Roles + Workspace.GunDrop)
+-- RenderStepped ESP Loop (Sticky Roles + Workspace.GunDrop)
 RunService.RenderStepped:Connect(function()
-    -- Fetch roles from GetPlayerData remote
+    -- Fetch roles safely every frame without crashing loop
     local success, res = pcall(function()
-        return ReplicatedStorage:FindFirstChild("GetPlayerData", true):InvokeServer()
+        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        local extras = remotes and remotes:FindFirstChild("Extras")
+        local remote = extras and extras:FindFirstChild("GetPlayerData")
+        return remote and remote:InvokeServer()
     end)
     
-    if success and res then
+    if success and res and type(res) == "table" then
         roles = res
         Murder, Sheriff, Hero = nil, nil, nil
         for i, v in pairs(roles) do
@@ -819,9 +828,10 @@ RunService.RenderStepped:Connect(function()
                 Hero = i
             end
         end
-        CreateHighlight()
-        UpdateHighlights()
     end
+
+    CreateHighlight()
+    UpdateHighlights()
 
     -- Workspace.GunDrop ESP (Purple 🟣 + "GUN" Tag)
     local droppedGun = getDroppedGun()
