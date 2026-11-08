@@ -14,6 +14,7 @@ local VirtualUser = game:GetService("VirtualUser")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
@@ -55,6 +56,28 @@ local autoGrabDebounce = false
 -- Shared Draggable Toggle for Mini Buttons
 local miniUiDraggable = false
 
+-- Invisibility State & Config Integration
+local invisConfig = {
+	TOGGLE_KEY = Enum.KeyCode.X,
+	DEFAULT_SPEED = 16,
+	BOOSTED_SPEED = 16,
+	SOUND_ID = "rbxassetid://942127495",
+	INVISIBILITY_POSITION = Vector3.new(-25.95, 84, 3537.55),
+	NOTIFICATION_DURATION = 3,
+}
+
+local playerState = {
+	isInvisible = false,
+	isSpeedBoosted = false,
+	originalSpeed = invisConfig.DEFAULT_SPEED,
+}
+
+local invisSound = Instance.new("Sound")
+invisSound.Name = "InvisToggleSound"
+invisSound.SoundId = invisConfig.SOUND_ID
+invisSound.Volume = 0.5
+invisSound.Parent = player:WaitForChild("PlayerGui")
+
 player.CharacterAdded:Connect(function(char)
 	character = char
 	rootPart = char:WaitForChild("HumanoidRootPart")
@@ -80,7 +103,6 @@ local function flyTo(pos, speed)
 	tween.Completed:Wait()
 end
 
--- Helper: Get Player Names List
 local function getPlayerList()
     local names = {}
     for _, p in ipairs(Players:GetPlayers()) do
@@ -92,7 +114,6 @@ local function getPlayerList()
     return names
 end
 
--- Helper: Find Dropped Gun Instance (GunDrop in Workspace)
 local function getDroppedGun()
     local directGun = Workspace:FindFirstChild("GunDrop")
     if directGun then return directGun end
@@ -102,7 +123,6 @@ local function getDroppedGun()
     return nil
 end
 
--- Teleport to Grab Gun Logic
 local function performGrabGun()
     local droppedGun = getDroppedGun()
     local myChar = player.Character
@@ -141,7 +161,6 @@ task.spawn(function()
     end
 end)
 
--- Bullet TP Target Retrieval via Remote Data
 local function getMurder()
     local remotes = ReplicatedStorage:FindFirstChild("Remotes")
     local extras = remotes and remotes:FindFirstChild("Extras")
@@ -194,13 +213,12 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         args[1] = tpCurrentTarget.CFrame + Vector3.new(0,3,0)
         args[2] = tpCurrentTarget.CFrame
 
-        return oldNamecall(self, unpack(args))
+        return oldNamecall(self, ...)
     end
 
     return oldNamecall(self, ...)
 end)
 
--- Fixed MM2 Hub Fling Function (Anti-Void Return)
 local function flingTarget(target)
     if not target or not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then return end
     local myChar = player.Character
@@ -242,7 +260,6 @@ local function flingTarget(target)
     end
 end
 
--- Dragging Logic Helper
 local function makeDraggable(button)
     local dragging = false
     local dragStart, startPos
@@ -327,7 +344,6 @@ aimBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Helper for aimlock target lookup
 function getMurdererCharacter()
     local remotes = ReplicatedStorage:FindFirstChild("Remotes")
     local extras = remotes and remotes:FindFirstChild("Extras")
@@ -417,6 +433,109 @@ grabGunBtn.MouseButton1Click:Connect(function()
     performGrabGun()
 end)
 
+-- ──────────────────────────────────────────────
+-- MINI UI 4: INVISIBILITY BUTTON
+-- ──────────────────────────────────────────────
+local invisGui = Instance.new("ScreenGui")
+invisGui.Name = "MM2_Invis_MiniUI"
+invisGui.ResetOnSpawn = false
+invisGui.Enabled = false
+invisGui.Parent = player:WaitForChild("PlayerGui")
+
+local invisBtn = Instance.new("TextButton")
+invisBtn.Name = "InvisButton"
+invisBtn.Size = UDim2.fromOffset(70, 65)
+invisBtn.Position = UDim2.new(0.8, 0, 0.32, 0)
+invisBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+invisBtn.Text = "👻 Invisibility\nButton"
+invisBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+invisBtn.Font = Enum.Font.GothamBold
+invisBtn.TextSize = 10
+invisBtn.Active = true
+invisBtn.Parent = invisGui
+
+Instance.new("UICorner", invisBtn).CornerRadius = UDim.new(0, 12)
+local invisStroke = Instance.new("UIStroke", invisBtn)
+invisStroke.Color = Color3.fromRGB(255, 120, 0)
+invisStroke.Thickness = 2
+
+makeDraggable(invisBtn)
+
+local function setCharacterTransparency(char, transparency)
+	for _, descendant in ipairs(char:GetDescendants()) do
+		if descendant:IsA("BasePart") or descendant:IsA("Decal") then
+			descendant.Transparency = transparency
+		end
+	end
+end
+
+local function executeInvisibilityToggle()
+    if not player.Character then
+        window:Notify({ title = "Invisibility", content = "Character not found!" })
+        return
+    end
+
+    playerState.isInvisible = not playerState.isInvisible
+    invisSound:Play()
+
+    if playerState.isInvisible then
+        invisBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
+        invisBtn.Text = "👻 Invisibility\nON"
+
+        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        if not humanoidRootPart then return end
+
+        local savedPosition = humanoidRootPart.CFrame
+
+        player.Character:MoveTo(invisConfig.INVISIBILITY_POSITION)
+        task.wait(0.15)
+
+        local seat = Instance.new("Seat")
+        seat.Name = "invischair"
+        seat.Anchored = false
+        seat.CanCollide = false
+        seat.Transparency = 1
+        seat.Position = invisConfig.INVISIBILITY_POSITION
+        seat.Parent = workspace
+
+        local weld = Instance.new("Weld")
+        weld.Part0 = seat
+        weld.Part1 = player.Character:FindFirstChild("Torso") or player.Character:FindFirstChild("UpperTorso")
+        weld.Parent = seat
+
+        task.wait()
+        seat.CFrame = savedPosition
+
+        setCharacterTransparency(player.Character, 0.5)
+
+        StarterGui:SetCore("SendNotification", {
+            Title = "Invisibility ON",
+            Text = "You are now invisible",
+            Duration = invisConfig.NOTIFICATION_DURATION,
+        })
+    else
+        invisBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+        invisBtn.Text = "👻 Invisibility\nButton"
+
+        local invisChair = workspace:FindFirstChild("invischair")
+        if invisChair then
+            invisChair:Destroy()
+        end
+
+        if player.Character then
+            setCharacterTransparency(player.Character, 0)
+        end
+
+        StarterGui:SetCore("SendNotification", {
+            Title = "Invisibility OFF",
+            Text = "You are now visible",
+            Duration = invisConfig.NOTIFICATION_DURATION,
+        })
+    end
+end
+
+invisBtn.MouseButton1Click:Connect(executeInvisibilityToggle)
+
 -- Anti-AFK Listener
 player.Idled:Connect(function()
 	if antiAFK then
@@ -442,7 +561,6 @@ local CombatTab = window:CreateTab({ name = "Combat", icon = 10747373176 })
 
 local combatGrid = CombatTab:CreateGroup()
 
--- Left Column: Gun & Auto Grab Tools
 local combatLeft = combatGrid:CreateGroup({ direction = "column" })
 
 combatLeft:CreateButton({
@@ -494,7 +612,6 @@ combatLeft:CreateToggle({
     end,
 })
 
--- Right Column: Player Fling, Bring & Aimlock
 local combatRight = combatGrid:CreateGroup({ direction = "column" })
 
 playerDropdown = combatRight:CreateDropdown({
@@ -592,11 +709,13 @@ combatRight:CreateToggle({
             aimStroke.Color = Color3.fromRGB(0, 255, 0)
             bulletStroke.Color = Color3.fromRGB(0, 255, 0)
             grabGunStroke.Color = Color3.fromRGB(0, 255, 0)
+            invisStroke.Color = Color3.fromRGB(0, 255, 0)
             window:Notify({ title = "Mini Buttons", content = "You can now drag and place mini UI buttons." })
         else
             aimStroke.Color = Color3.fromRGB(255, 120, 0)
             bulletStroke.Color = Color3.fromRGB(255, 120, 0)
             grabGunStroke.Color = Color3.fromRGB(255, 120, 0)
+            invisStroke.Color = Color3.fromRGB(255, 120, 0)
             window:Notify({ title = "Mini Buttons", content = "Mini UI button positions locked." })
         end
     end,
@@ -698,7 +817,6 @@ local EspTab = window:CreateTab({ name = "ESP", icon = 10723415903 })
 
 local espGrid = EspTab:CreateGroup()
 
--- Left Column: Guide & Role ESP Toggles
 local espLeft = espGrid:CreateGroup({ direction = "column" })
 
 espLeft:CreateButton({
@@ -725,7 +843,6 @@ espLeft:CreateToggle({
     end,
 })
 
--- Right Column: High Priority ESP Toggles
 local espRight = espGrid:CreateGroup({ direction = "column" })
 
 espRight:CreateToggle({
@@ -742,7 +859,6 @@ espRight:CreateToggle({
     end,
 })
 
--- Sticky Helper functions for role-based ESP
 local function CreateHighlight()
 	for _, v in pairs(Players:GetChildren()) do
 		if v ~= player and v.Character then
@@ -806,9 +922,7 @@ local function UpdateHighlights()
 	end
 end
 
--- RenderStepped ESP Loop (Sticky Roles + Workspace.GunDrop)
 RunService.RenderStepped:Connect(function()
-    -- Fetch roles safely every frame without crashing loop
     local success, res = pcall(function()
         local remotes = ReplicatedStorage:FindFirstChild("Remotes")
         local extras = remotes and remotes:FindFirstChild("Extras")
@@ -833,7 +947,6 @@ RunService.RenderStepped:Connect(function()
     CreateHighlight()
     UpdateHighlights()
 
-    -- Workspace.GunDrop ESP (Purple 🟣 + "GUN" Tag)
     local droppedGun = getDroppedGun()
     if droppedGun then
         local hl = droppedGun:FindFirstChild("MM2_Gun_Highlight")
@@ -874,5 +987,48 @@ RunService.RenderStepped:Connect(function()
             if hl then hl:Destroy() end
             if bbGui then bbGui:Destroy() end
         end
+    end
+end)
+
+-- ──────────────────────────────────────────────
+-- TAB 4: PLAYER (INVISIBILITY MINI BUTTON & FE ANIMATION CHANGER)
+-- ──────────────────────────────────────────────
+local PlayerTab = window:CreateTab({ name = "Player", icon = 10723424174 })
+
+PlayerTab:CreateToggle({
+    name = "👻 Show Invisibility Button",
+    callback = function(value)
+        invisGui.Enabled = value
+        if value then
+            window:Notify({ title = "Invisibility UI", content = "Invisibility Button Spawned!" })
+        else
+            window:Notify({ title = "Invisibility UI", content = "Invisibility Button Hidden!" })
+        end
+    end,
+})
+
+PlayerTab:CreateButton({
+    name = "🎭 FE Animation Changer",
+    callback = function()
+        local success, err = pcall(function()
+            loadstring(game:HttpGet("https://api.rubis.app/v2/scrap/PwFrcMysMOIJuWAQ/raw"))()
+        end)
+        if success then
+            window:Notify({ title = "Animation Changer", content = "FE Animation script executed successfully!" })
+        else
+            window:Notify({ title = "Animation Error", content = "Failed to load script!" })
+        end
+    end,
+})
+
+-- Clean up invisible chairs on respawn
+player.CharacterAdded:Connect(function(character)
+    playerState.isInvisible = false
+    invisBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+    invisBtn.Text = "👻 Invisibility\nButton"
+    
+    local invisChair = workspace:FindFirstChild("invischair")
+    if invisChair then
+        invisChair:Destroy()
     end
 end)
