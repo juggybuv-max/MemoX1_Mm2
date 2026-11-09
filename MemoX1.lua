@@ -1014,10 +1014,6 @@ PlayerTab:CreateButton({
     callback = function()
         local success, err = pcall(function()
             loadstring(game:HttpGet("https://api.lyraez.lol/loader"))()
-        if success then
-            window:Notify({ title = "avatar copy", content = "  avatar copy script executed successfully!" })
-        else
-            window:Notify({ title = "avatar copy error", content = "Failed to load script!" })
         end
     end,
 })
